@@ -1,0 +1,24 @@
+# Environment
+.env
+.venv/
+*.md
+!README.md
+
+# Data files (specific to this project)
+*.geojson
+*.json
+*.zip
+*.tar
+*.gz
+IND_AdminUnit_Centroids/
+
+# IDE
+.vscode/
+*~
+.history/
+
+# OS
+Desktop.ini
+
+# uv lock file
+uv.lock

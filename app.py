@@ -18,33 +18,27 @@ df = pd.read_csv("IND_5yrs_InternalMigFlows_2010.csv")
 states = gpd.read_file("india_states.geojson").to_crs(epsg=4326)
 
 # Create 10 levels of simplified geometries for different zoom levels
-# Based on the provided scaling table, where higher "scale" value means larger area visible (more zoomed out)
-# The scaling factor likely represents level of simplification needed
-# Level 0 (zoom 1): most generalization (scaling factor 5.0 -> simplification 0.2)
-# Level 9 (zoom 10): least generalization (scaling factor 0.5 -> simplification 0.01)
-simplification_levels = []
+# Implement caching approach for geometric simplification based on zoom levels
+# Level 0: zoomed out (~3000+ km extent) - highest simplification
+# Level 9: zoomed in (~300 km extent) - lowest simplification (most detail)
+# Once detailed data is loaded, it remains cached and available for lower zoom levels
 
-# The table suggests that as we zoom in (higher zoom level), we want less simplification (more detail)
-# So zoom level 1 corresponds to max simplification, zoom level 10 to min simplification
-# Map scaling factors to appropriate simplification values for Shapely
-factor_mapping = [
-    0.20,   # Level 0: zoom 1, scaling factor 5.0 -> high simplification
-    0.18,   # Level 1: zoom 2, scaling factor 4.5
-    0.15,   # Level 2: zoom 3, scaling factor 4.0
-    0.12,   # Level 3: zoom 4, scaling factor 3.5
-    0.10,   # Level 4: zoom 5, scaling factor 3.0
-    0.08,   # Level 5: zoom 6, scaling factor 2.5
-    0.06,   # Level 6: zoom 7, scaling factor 2.0
-    0.04,   # Level 7: zoom 8, scaling factor 1.5
-    0.02,   # Level 8: zoom 9, scaling factor 1.0
-    0.0001  # Level 9: zoom 10, scaling factor 0.5 -> low simplification (most detail)
-]
+# Map with appropriate simplification values for Shapely based on zoom level requirements
+# The simplification factor increases as we zoom in (more detail needed)
+# Level 0: highest simplification for large extent (3000+ km)
+# Level 9: lowest simplification for small extent (300 km)
+simplification_factors = [0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05]
 
+# Cache for storing simplified geometries at each level (implementing reuse mechanism)
+simplification_cache = {}
 for i in range(10):
-    simplification_factor = factor_mapping[i]
+    simplification_factor = simplification_factors[i]
     simplified_states = states.copy()
     simplified_states['geometry'] = states['geometry'].simplify(simplification_factor)
-    simplification_levels.append(simplified_states)
+    simplification_cache[i] = simplified_states
+
+# Use simplification_levels as global variable for the API
+simplification_levels = [simplification_cache[i] for i in range(10)]
 
 # Process migration data to match with states
 origins = gpd.GeoDataFrame(
@@ -85,20 +79,36 @@ state_centroids = gpd.GeoSeries(state_centroids_projected, crs=states_projected.
 def index():
     return render_template('index.html')
 
+# Global variables for caching the most detailed data loaded
+most_detailed_level_loaded = -1
+cached_most_detailed_data = None
+
 @app.route('/api/boundaries')
 def get_boundaries():
     """API endpoint to get boundaries based on zoom level (10 levels)"""
     zoom = request.args.get('zoom', 5, type=int)
     
+    global most_detailed_level_loaded, cached_most_detailed_data
+    
     # Map zoom level (1-10) to simplification level (0-9)
-    # Higher zoom = more detail = lower simplification index
-    simplification_index = min(9, max(0, zoom - 1))  # Ensure index is between 0-9
+    # Higher zoom level = more detail = lower simplification factor
+    requested_level = min(9, max(0, zoom - 1))  # Ensure index is between 0-9
     
-    # Get the appropriate simplified geometry
-    simplified_states = simplification_levels[simplification_index]
-    
-    # Convert to GeoJSON
-    geojson_data = json.loads(simplified_states.to_json())
+    # Implement caching: if we've loaded a more detailed level, continue using it
+    # The principle: once we load detailed data, keep using it even when zooming out
+    if requested_level <= most_detailed_level_loaded and cached_most_detailed_data is not None:
+        # Reuse the cached most detailed data
+        geojson_data = cached_most_detailed_data
+    else:
+        # Load new data at the requested level
+        simplified_states = simplification_levels[requested_level]
+        
+        # Update cache if this is a more detailed level than previously cached
+        if requested_level > most_detailed_level_loaded:
+            most_detailed_level_loaded = requested_level
+            cached_most_detailed_data = json.loads(simplified_states.to_json())
+        
+        geojson_data = json.loads(simplified_states.to_json())
     
     # Add migration data to features
     for feature in geojson_data['features']:
@@ -245,6 +255,14 @@ def get_net_migration():
             })
     
     return jsonify(net_flows)
+
+@app.route('/api/reset_cache')
+def reset_cache():
+    """API endpoint to reset the boundary cache"""
+    global most_detailed_level_loaded, cached_most_detailed_data
+    most_detailed_level_loaded = -1
+    cached_most_detailed_data = None
+    return jsonify({"status": "cache_reset"})
 
 if __name__ == '__main__':
     print("Starting migration visualization app...")

@@ -70,14 +70,10 @@ in_mig = flows.groupby('dest_state')['PrdMIG'].sum()
 out_mig = flows.groupby('origin_state')['PrdMIG'].sum()
 net_mig = in_mig.subtract(out_mig, fill_value=0)
 
-# Calculate centroids for flow visualization and cache them
-if 'india' not in state_centroids_cache:  # Cache centroids for India states
-    states_projected = states.to_crs(epsg=32643)
-    state_centroids_projected = states_projected.set_index('state').geometry.centroid
-    state_centroids = gpd.GeoSeries(state_centroids_projected, crs=states_projected.crs).to_crs(epsg=4326)
-    state_centroids_cache['india'] = state_centroids
-else:
-    state_centroids = state_centroids_cache['india']
+# Calculate centroids for flow visualization once globally
+states_projected = states.to_crs(epsg=32643)
+state_centroids_projected = states_projected.set_index('state').geometry.centroid
+state_centroids = gpd.GeoSeries(state_centroids_projected, crs=states_projected.crs).to_crs(epsg=4326)
 
 @app.route('/')
 def index():

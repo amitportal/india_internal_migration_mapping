@@ -27,7 +27,7 @@ states = gpd.read_file("india_states.geojson").to_crs(epsg=4326)
 # The simplification factor increases as we zoom in (more detail needed)
 # Level 0: highest simplification for large extent (3000+ km)
 # Level 9: lowest simplification for small extent (300 km)
-simplification_factors = [0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05]
+simplification_factors = [0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.001]
 
 # Cache for storing simplified geometries at each level (implementing reuse mechanism)
 simplification_cache = {}
@@ -70,10 +70,14 @@ in_mig = flows.groupby('dest_state')['PrdMIG'].sum()
 out_mig = flows.groupby('origin_state')['PrdMIG'].sum()
 net_mig = in_mig.subtract(out_mig, fill_value=0)
 
-# Calculate centroids for flow visualization
-states_projected = states.to_crs(epsg=32643)
-state_centroids_projected = states_projected.set_index('state').geometry.centroid
-state_centroids = gpd.GeoSeries(state_centroids_projected, crs=states_projected.crs).to_crs(epsg=4326)
+# Calculate centroids for flow visualization and cache them
+if 'india' not in state_centroids_cache:  # Cache centroids for India states
+    states_projected = states.to_crs(epsg=32643)
+    state_centroids_projected = states_projected.set_index('state').geometry.centroid
+    state_centroids = gpd.GeoSeries(state_centroids_projected, crs=states_projected.crs).to_crs(epsg=4326)
+    state_centroids_cache['india'] = state_centroids
+else:
+    state_centroids = state_centroids_cache['india']
 
 @app.route('/')
 def index():
@@ -82,6 +86,9 @@ def index():
 # Global variables for caching the most detailed data loaded
 most_detailed_level_loaded = -1
 cached_most_detailed_data = None
+
+# Additional cache for storing precomputed centroids to maintain quality upon zooming
+state_centroids_cache = {}
 
 @app.route('/api/boundaries')
 def get_boundaries():

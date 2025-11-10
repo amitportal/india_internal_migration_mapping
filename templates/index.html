@@ -654,7 +654,7 @@
             });
         }
         
-        // Function to highlight all flows between two states
+        // Function to highlight all flows between two states with correct values
         function highlightFlowsBetweenStates(state1, state2) {
             if (!flowLayer) return;
             
@@ -663,7 +663,7 @@
                 
                 // Check if tooltip contains both states (indicating a flow between them)
                 if (tooltipContent && tooltipContent.includes(state1) && tooltipContent.includes(state2)) {
-                    // Highlight this flow
+                    // Highlight this flow and ensure it shows correct styling
                     layer.setStyle({
                         weight: (layer.options.weight || 2) + 3,
                         opacity: 1.0

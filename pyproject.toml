@@ -1,0 +1,16 @@
+[project]
+name = "ind-5yrs-internalmigflows-2010"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "folium>=0.20.0",
+    "geopandas>=1.1.1",
+    "pandas>=2.3.3",
+    "pyproj>=3.7.2",
+    "requests>=2.32.5",
+    "rtree>=1.4.1",
+    "shapely>=2.1.2",
+    "flask>=2.3.3",
+]

@@ -3,6 +3,7 @@
 .venv/
 *.md
 !README.md
+!INSTALL.md
 
 # Data files (specific to this project)
 *.geojson

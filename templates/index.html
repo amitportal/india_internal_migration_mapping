@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>India Internal Migration Flows</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 75%;  /* Make room for side panel */
+        }
+        
+        #side-panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 25%;
+            background: white;
+            z-index: 1000;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.2);
+            overflow-y: auto;
+            display: none; /* Hidden by default */
+            padding: 15px;
+        }
+        
+        #side-panel.active {
+            display: block;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 265px; /* Adjust for side panel */
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            width: 250px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .slider-container input {
+            flex: 1;
+            margin-right: 10px;
+        }
+        
+        .slider-value {
+            width: 60px;
+            text-align: right;
+        }
+        
+        #legend {
+            position: absolute;
+            bottom: 40px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 12px;
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 300px;
+        }
+        
+        .info-section {
+            margin-bottom: 10px;
+        }
+        
+        .info-section h3 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+        }
+        
+        .info-value {
+            font-weight: bold;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .state-detail {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .state-detail h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        
+        .migration-summary {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .migration-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+        }
+        
+        .flow-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .flow-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="info-panel">
+        <div class="info-section">
+            <h3>India Internal Migration</h3>
+            <p>Interactive visualization of migration flows between states</p>
+        </div>
+        <div class="info-section">
+            <h3>Total Migration:</h3>
+            <p class="info-value" id="total-mig">Loading...</p>
+        </div>
+        <div class="info-section">
+            <h3>States:</h3>
+            <p class="info-value" id="num-states">Loading...</p>
+        </div>
+        <div class="info-section">
+            <h3>Migration Flows:</h3>
+            <p class="info-value" id="num-flows">Loading...</p>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <h3>Migration Filters</h3>
+        
+        <div class="control-group">
+            <label>Flow Type</label>
+            <label><input type="checkbox" id="show-out" checked> Out-Migration (Red)</label>
+            <label><input type="checkbox" id="show-in" checked> In-Migration (Blue)</label>
+            <label><input type="checkbox" id="show-net" checked> Net Migration (White)</label>
+        </div>
+        
+        <div class="control-group">
+            <label>Min Flow Size: <span id="flow-threshold-value">10,000</span></label>
+            <div class="slider-container">
+                <input type="range" id="flow-threshold" min="0" max="500000" value="10000" step="10000">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>State Highlighting</label>
+            <button id="reset-highlight">Reset Highlight</button>
+        </div>
+        
+        <div id="selection-help" style="margin-top: 10px; padding: 8px; background-color: #f0f8ff; border-radius: 4px; border-left: 3px solid #007cba; font-size: 12px;">
+            Press <strong>ESC</strong> to deselect and enable hover functionality
+        </div>
+    </div>
+    
+    <div id="legend">
+        <h4>Migration Legend</h4>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #FF4444;"></div>
+            <span>Net Out-Migration</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #4444FF;"></div>
+            <span>Net In-Migration</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #FF0000;"></div>
+            <span>Out-Migration Flow</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #0000FF;"></div>
+            <span>In-Migration Flow</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #FFFFFF;"></div>
+            <span>Net Migration Flow</span>
+        </div>
+    </div>
+    
+    <!-- Side panel for state details -->
+    <div id="side-panel">
+        <button class="close-btn" id="close-panel">X</button>
+        <div id="state-details">
+            <h2 id="state-name">State Name</h2>
+            <div class="migration-summary">
+                <div class="migration-item">
+                    <span>In-Migration:</span>
+                    <span id="state-in-mig">0</span>
+                </div>
+                <div class="migration-item">
+                    <span>Out-Migration:</span>
+                    <span id="state-out-mig">0</span>
+                </div>
+                <div class="migration-item">
+                    <span>Net Migration:</span>
+                    <span id="state-net-mig">0</span>
+                </div>
+            </div>
+            
+            <h3>Out-Migration Flows</h3>
+            <div class="flow-list" id="out-flows-list">
+                <!-- Out flows will be populated here -->
+            </div>
+            
+            <h3>In-Migration Flows</h3>
+            <div class="flow-list" id="in-flows-list">
+                <!-- In flows will be populated here -->
+            </div>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Initialize the map with India's bounds
+        const map = L.map('map').fitBounds([
+            [6.75, 68.1],  // Southwest corner of India
+            [37.1, 97.4]   // Northeast corner of India
+        ]);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Track map layers and selection state
+        let boundaryLayer = null;
+        let flowLayer = null;
+        let highlightedState = null;
+        let selectedState = null;  // State that was clicked
+        let selectedFlowPair = null;  // Pair of states for clicked flow [state1, state2]
+        let selectionActive = false;  // Whether a selection is active (either state or flow)
+        
+        // Color functions
+        function getStateColor(netMig) {
+            if (netMig > 0) {
+                // Blue scale for net in-migration
+                const intensity = Math.min(255, Math.max(50, 100 + Math.floor(155 * (netMig / 500000))));
+                return `rgb(0, ${Math.min(255, intensity)}, 255)`;
+            } else {
+                // Red scale for net out-migration
+                const intensity = Math.min(255, Math.max(50, 100 + Math.floor(155 * (Math.abs(netMig) / 500000))));
+                return `rgb(${Math.min(255, intensity)}, 0, 0)`;
+            }
+        }
+        
+        // Function to draw Bezier curve between two points
+        function drawFlowLine(from, to, properties, isOutFlow = true) {
+            const latLngs = [];
+            const [lon1, lat1] = from;
+            const [lon2, lat2] = to;
+            
+            // Calculate control point for curve
+            const midLat = (lat1 + lat2) / 2 + 2 * (isOutFlow ? 1 : -1); // Different curve directions for in/out
+            const midLon = (lon1 + lon2) / 2;
+            
+            // Create points along the curve (simplified Bezier)
+            for (let i = 0; i <= 1; i += 0.1) {
+                const x = Math.pow(1 - i, 2) * lon1 + 2 * (1 - i) * i * midLon + Math.pow(i, 2) * lon2;
+                const y = Math.pow(1 - i, 2) * lat1 + 2 * (1 - i) * i * midLat + Math.pow(i, 2) * lat2;
+                latLngs.push([y, x]);
+            }
+            
+            const color = isOutFlow ? '#FF0000' : '#0000FF';
+            const weight = Math.max(1, Math.min(10, properties.flow_value / 50000));
+            const opacity = 0.3 + 0.5 * (properties.flow_value / 500000); // Assuming max flow is around 500k
+            
+            const flowLine = L.polyline(latLngs, {
+                color: color,
+                weight: weight,
+                opacity: opacity,
+                smoothFactor: 2
+            }).bindTooltip(`${isOutFlow ? 'OUT' : 'IN'}: ${properties.origin_state || 'N/A'} → ${properties.dest_state || 'N/A'}, ${Math.round(properties.flow_value).toLocaleString()} people`);
+            
+            // Add click event to highlight all flows between these two states
+            flowLine.on('click', function(e) {
+                // Set this flow pair as selected and activate selection mode
+                selectedState = null;  // Clear any state selection
+                selectedFlowPair = [properties.origin_state, properties.dest_state];
+                selectionActive = true;
+                
+                highlightFlowsBetweenStates(properties.origin_state, properties.dest_state);
+            });
+            
+            return flowLine;
+        }
+        
+        // Function to get state centroids for net migration lines
+        // Since we don't have centroids pre-loaded, we'll fetch state boundaries when needed
+        let stateCentroids = {};
+        
+        // Function to draw straight Net Migration line between two points
+        function drawNetFlowLine(from, to, properties) {
+            const latLngs = [[from[1], from[0]], [to[1], to[0]]]; // [lat, lon] format for Leaflet
+            
+            // White color for net migration
+            const color = '#FFFFFF'; // White
+            const weight = Math.max(1, Math.min(8, properties.net_flow / 100000));
+            const opacity = 0.4 + 0.4 * (properties.net_flow / 500000); // Assuming max net flow is around 500k
+            
+            const netFlowLine = L.polyline(latLngs, {
+                color: color,
+                weight: weight,
+                opacity: opacity,
+                dashArray: '8, 2'  // Dashed line to distinguish from regular flows
+            }).bindTooltip(`NET: ${properties.from_state} ↔ ${properties.to_state}, ${Math.round(properties.net_flow).toLocaleString()} people`);
+
+            // Add click event to highlight all flows between these two states
+            netFlowLine.on('click', function(e) {
+                // Set this flow pair as selected and activate selection mode
+                selectedState = null;  // Clear any state selection
+                selectedFlowPair = [properties.from_state, properties.to_state];
+                selectionActive = true;
+                
+                highlightFlowsBetweenStates(properties.from_state, properties.to_state);
+            });
+
+            return netFlowLine;
+        }
+
+        // Function to update map based on current view and filters
+        function updateMap() {
+            const zoom = map.getZoom();
+            const minFlow = parseInt(document.getElementById('flow-threshold').value);
+            
+            // Initialize state centroids for this update cycle
+            stateCentroids = {};
+            
+            // Update boundaries based on zoom
+            fetch(`/api/boundaries?zoom=${zoom}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Clear existing boundary layer
+                    if (boundaryLayer) {
+                        map.removeLayer(boundaryLayer);
+                    }
+                    
+                    // Create new boundary layer
+                    boundaryLayer = L.geoJSON(data, {
+                        style: function(feature) {
+                            const netMig = feature.properties.net_mig || 0;
+                            const isHighlighted = highlightedState && feature.properties.state === highlightedState;
+                            
+                            return {
+                                fillColor: getStateColor(netMig),
+                                color: isHighlighted ? '#FFA500' : '#333',
+                                weight: isHighlighted ? 3 : 1,
+                                fillOpacity: 0.7
+                            };
+                        },
+                        onEachFeature: function(feature, layer) {
+                            // Calculate centroid on the fly for net migration
+                            const bounds = layer.getBounds();
+                            const centroid = [bounds.getCenter().lat, bounds.getCenter().lng];
+                            stateCentroids[feature.properties.state] = centroid;
+                            
+                            layer.bindTooltip(feature.properties.state);
+                            
+                            // Add hover events (only if no selection is active)
+                            layer.on({
+                                mouseover: function(e) {
+                                    // Only change appearance if no selection is active
+                                    if (!selectionActive) {
+                                        const layer = e.target;
+                                        layer.setStyle({
+                                            weight: 3,
+                                            color: '#FFA500',
+                                            fillOpacity: 0.9
+                                        });
+                                        
+                                        // Highlight related flows if no selection is active
+                                        highlightStateFlows(feature.properties.state);
+                                    }
+                                },
+                                mouseout: function(e) {
+                                    // Only reset if no selection is active
+                                    if (!selectionActive) {
+                                        if (feature.properties.state !== selectedState) {
+                                            e.target.setStyle({
+                                                weight: 1,
+                                                color: '#333',
+                                                fillOpacity: 0.7
+                                            });
+                                        }
+                                        
+                                        // If no selection is active, reset flow visibility
+                                        if (!selectedState) {
+                                            updateFlowVisibility();
+                                        }
+                                    }
+                                },
+                                click: function(e) {
+                                    // Set this state as selected and activate selection mode
+                                    selectedState = feature.properties.state;
+                                    selectedFlowPair = null;  // Clear any flow selection
+                                    selectionActive = true;
+                                    
+                                    // Update all boundaries to reflect selection
+                                    boundaryLayer.eachLayer(function(layer) {
+                                        if (layer.feature.properties.state === selectedState) {
+                                            layer.setStyle({
+                                                weight: 3,
+                                                color: '#FFA500',
+                                                fillOpacity: 0.9
+                                            });
+                                        } else {
+                                            layer.setStyle({
+                                                weight: 1,
+                                                color: '#333',
+                                                fillOpacity: 0.7
+                                            });
+                                        }
+                                    });
+                                    
+                                    highlightStateFlows(feature.properties.state);
+                                    
+                                    // Show state details in side panel
+                                    showStateDetails(feature.properties.state);
+                                }
+                            });
+                        }
+                    }).addTo(map);
+                    
+                    // After boundaries are loaded, create flow layer and add all flows
+                    // Create a container for all flow layers
+                    if (flowLayer) {
+                        map.removeLayer(flowLayer);
+                    }
+                    
+                    flowLayer = L.layerGroup().addTo(map);
+                    
+                    // Get regular migration flows
+                    fetch(`/api/flows?min_flow=${minFlow}`)
+                        .then(response => response.json())
+                        .then(flowData => {
+                            const flowFeatures = [];
+                            
+                            flowData.forEach(flow => {
+                                // Draw out-migration line
+                                if (document.getElementById('show-out').checked) {
+                                    const outLine = drawFlowLine(flow.origin_coords, flow.dest_coords, flow, true);
+                                    flowFeatures.push(outLine);
+                                }
+                                
+                                // Draw in-migration line (reverse direction)
+                                if (document.getElementById('show-in').checked) {
+                                    const inLine = drawFlowLine(flow.dest_coords, flow.origin_coords, flow, false);
+                                    flowFeatures.push(inLine);
+                                }
+                            });
+                            
+                            // Add regular flows to the flow layer
+                            flowFeatures.forEach(feature => flowLayer.addLayer(feature));
+                        })
+                        .catch(error => console.error('Error loading flows:', error));
+                    
+                    // Get net migration flows
+                    if (document.getElementById('show-net').checked) {
+                        fetch(`/api/net_migration?min_flow=${minFlow}`)
+                            .then(response => response.json())
+                            .then(netFlowData => {
+                                const netFlowFeatures = [];
+                                
+                                netFlowData.forEach(flow => {
+                                    // Get centroids for the state pair
+                                    const fromCentroid = stateCentroids[flow.from_state];
+                                    const toCentroid = stateCentroids[flow.to_state];
+                                    
+                                    // Only draw if we have centroids for both states
+                                    if (fromCentroid && toCentroid) {
+                                        const netLine = drawNetFlowLine(
+                                            [fromCentroid[1], fromCentroid[0]], // [lon, lat] for from
+                                            [toCentroid[1], toCentroid[0]],     // [lon, lat] for to
+                                            flow
+                                        );
+                                        netFlowFeatures.push(netLine);
+                                    }
+                                });
+                                
+                                // Add net flows to the flow layer
+                                netFlowFeatures.forEach(feature => flowLayer.addLayer(feature));
+                            })
+                            .catch(error => console.error('Error loading net flows:', error));
+                    }
+                })
+                .catch(error => console.error('Error loading boundaries:', error));
+        }
+        
+        // Function to highlight flows for a specific state
+        function highlightStateFlows(stateName) {
+            if (!flowLayer) return;
+            
+            flowLayer.eachLayer(function(layer) {
+                const tooltip = layer.getTooltip();
+                if (tooltip && tooltip.getContent().includes(stateName)) {
+                    // Highlight this flow
+                    let baseWeight = 2;
+                    if (tooltip.getContent().includes('NET:')) {
+                        // For net flows, extract the original weight calculation
+                        const flowValue = extractNetFlowValue(tooltip.getContent());
+                        baseWeight = Math.max(1, Math.min(8, flowValue / 100000));
+                    } else {
+                        // For regular flows, extract the original weight calculation
+                        const flowValue = extractFlowValue(tooltip.getContent());
+                        baseWeight = Math.max(1, Math.min(10, flowValue / 50000));
+                    }
+                    
+                    layer.setStyle({
+                        weight: baseWeight + 3,
+                        opacity: 1.0
+                    });
+                } else {
+                    // Dim other flows to very low opacity
+                    layer.setStyle({
+                        weight: layer.options.weight || 2,
+                        opacity: 0.1
+                    });
+                }
+            });
+        }
+        
+        // Function to update flow visibility based on filters
+        function updateFlowVisibility() {
+            if (!flowLayer) return;
+            
+            flowLayer.eachLayer(function(layer) {
+                const tooltipContent = layer.getTooltip() ? layer.getTooltip().getContent() : '';
+                
+                // Reset styles to defaults based on flow type
+                if (tooltipContent.includes('OUT:') || tooltipContent.includes('IN:')) {
+                    // Regular flow line
+                    const flowValue = extractFlowValue(tooltipContent);
+                    const weight = Math.max(1, Math.min(10, flowValue / 50000));
+                    const opacity = 0.3 + 0.5 * (flowValue / 500000);
+                    layer.setStyle({
+                        weight: weight,
+                        opacity: opacity
+                    });
+                } else if (tooltipContent.includes('NET:')) {
+                    // Net flow line
+                    const flowValue = extractNetFlowValue(tooltipContent);
+                    const weight = Math.max(1, Math.min(8, flowValue / 100000));
+                    const opacity = 0.4 + 0.4 * (flowValue / 500000);
+                    layer.setStyle({
+                        weight: weight,
+                        opacity: opacity
+                    });
+                }
+                
+                // Apply filter based on type if a state is selected (not just highlighted)
+                if (selectedState) {
+                    if (tooltipContent.includes(selectedState)) {
+                        let baseWeight = 2;
+                        if (tooltipContent.includes('NET:')) {
+                            const flowValue = extractNetFlowValue(tooltipContent);
+                            baseWeight = Math.max(1, Math.min(8, flowValue / 100000));
+                        } else {
+                            const flowValue = extractFlowValue(tooltipContent);
+                            baseWeight = Math.max(1, Math.min(10, flowValue / 50000));
+                        }
+                        
+                        layer.setStyle({
+                            weight: baseWeight + 3,
+                            opacity: 1.0
+                        });
+                    } else {
+                        layer.setStyle({
+                            opacity: 0.1  // Very dim for non-selected flows
+                        });
+                    }
+                }
+            });
+        }
+        
+        // Function to highlight all flows between two states
+        function highlightFlowsBetweenStates(state1, state2) {
+            if (!flowLayer) return;
+            
+            flowLayer.eachLayer(function(layer) {
+                const tooltipContent = layer.getTooltip() ? layer.getTooltip().getContent() : '';
+                
+                // Check if tooltip contains both states (indicating a flow between them)
+                if (tooltipContent && tooltipContent.includes(state1) && tooltipContent.includes(state2)) {
+                    // Highlight this flow
+                    layer.setStyle({
+                        weight: (layer.options.weight || 2) + 3,
+                        opacity: 1.0
+                    });
+                } else {
+                    // Dim other flows to very low opacity
+                    layer.setStyle({
+                        weight: layer.options.weight || 2,
+                        opacity: 0.1
+                    });
+                }
+            });
+        }
+
+        // Function to load and display statistics
+        function loadStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(stats => {
+                    document.getElementById('total-mig').textContent = stats.total_migration.toLocaleString();
+                    document.getElementById('num-states').textContent = stats.num_states;
+                    document.getElementById('num-flows').textContent = stats.num_flows;
+                })
+                .catch(error => console.error('Error loading stats:', error));
+        }
+        
+        // Function to reset selection and return to hover mode
+        function resetSelection() {
+            selectedState = null;
+            selectedFlowPair = null;
+            selectionActive = false;
+            
+            // Reset boundary styles
+            if (boundaryLayer) {
+                boundaryLayer.eachLayer(function(layer) {
+                    if (layer.feature && layer.feature.properties) {
+                        const netMig = layer.feature.properties.net_mig || 0;
+                        layer.setStyle({
+                            fillColor: getStateColor(netMig),
+                            color: '#333',
+                            weight: 1,
+                            fillOpacity: 0.7
+                        });
+                    }
+                });
+            }
+            
+            // Reset flow styles
+            if (flowLayer) {
+                flowLayer.eachLayer(function(layer) {
+                    const tooltipContent = layer.getTooltip() ? layer.getTooltip().getContent() : '';
+                    
+                    // Reset styles to defaults
+                    if (tooltipContent.includes('OUT:') || tooltipContent.includes('IN:')) {
+                        // Regular flow line
+                        const flowValue = extractFlowValue(tooltipContent);
+                        const weight = Math.max(1, Math.min(10, flowValue / 50000));
+                        const opacity = 0.3 + 0.5 * (flowValue / 500000);
+                        layer.setStyle({
+                            weight: weight,
+                            opacity: opacity
+                        });
+                    } else if (tooltipContent.includes('NET:')) {
+                        // Net flow line
+                        const flowValue = extractNetFlowValue(tooltipContent);
+                        const weight = Math.max(1, Math.min(8, flowValue / 100000));
+                        const opacity = 0.4 + 0.4 * (flowValue / 500000);
+                        layer.setStyle({
+                            weight: weight,
+                            opacity: opacity
+                        });
+                    }
+                });
+            }
+            
+            // Hide side panel if showing selected state details
+            document.getElementById('side-panel').classList.remove('active');
+        }
+
+        // Helper function to extract flow value from tooltip
+        function extractFlowValue(tooltip) {
+            const match = tooltip.match(/(\d{1,3}(?:,\d{3})*) people/);
+            if (match) {
+                return parseFloat(match[1].replace(/,/g, ''));
+            }
+            return 0;
+        }
+
+        // Helper function to extract net flow value from tooltip
+        function extractNetFlowValue(tooltip) {
+            const match = tooltip.match(/(\d{1,3}(?:,\d{3})*) people/);
+            if (match) {
+                return parseFloat(match[1].replace(/,/g, ''));
+            }
+            return 0;
+        }
+
+        // Function to show state details in the side panel
+        function showStateDetails(stateName) {
+            fetch(`/api/state_migration/${encodeURIComponent(stateName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Update the side panel with state data
+                    document.getElementById('state-name').textContent = data.state;
+                    document.getElementById('state-in-mig').textContent = data.total_in.toLocaleString();
+                    document.getElementById('state-out-mig').textContent = data.total_out.toLocaleString();
+                    document.getElementById('state-net-mig').textContent = data.net_mig.toLocaleString();
+                    
+                    // Update out flows list
+                    const outList = document.getElementById('out-flows-list');
+                    outList.innerHTML = '';
+                    data.out_flows.forEach(flow => {
+                        const flowItem = document.createElement('div');
+                        flowItem.className = 'flow-item';
+                        flowItem.innerHTML = `
+                            <div><strong>${flow.to_state}</strong></div>
+                            <div>${Math.round(flow.flow_value).toLocaleString()} people</div>
+                        `;
+                        outList.appendChild(flowItem);
+                    });
+                    
+                    // Update in flows list
+                    const inList = document.getElementById('in-flows-list');
+                    inList.innerHTML = '';
+                    data.in_flows.forEach(flow => {
+                        const flowItem = document.createElement('div');
+                        flowItem.className = 'flow-item';
+                        flowItem.innerHTML = `
+                            <div><strong>${flow.from_state}</strong></div>
+                            <div>${Math.round(flow.flow_value).toLocaleString()} people</div>
+                        `;
+                        inList.appendChild(flowItem);
+                    });
+                    
+                    // Show the side panel
+                    document.getElementById('side-panel').classList.add('active');
+                })
+                .catch(error => console.error('Error loading state details:', error));
+        }
+        
+        // Set up event listeners for controls
+        document.getElementById('flow-threshold').addEventListener('input', function() {
+            const value = parseInt(this.value);
+            document.getElementById('flow-threshold-value').textContent = value.toLocaleString();
+            updateMap();
+        });
+        
+        document.getElementById('show-out').addEventListener('change', updateMap);
+        document.getElementById('show-in').addEventListener('change', updateMap);
+        document.getElementById('show-net').addEventListener('change', updateMap);
+        
+        document.getElementById('reset-highlight').addEventListener('click', function() {
+            resetSelection();
+        });
+        
+        // Close side panel button
+        document.getElementById('close-panel').addEventListener('click', function() {
+            document.getElementById('side-panel').classList.remove('active');
+            resetSelection();
+        });
+        
+        // Add keyboard event listener for ESC key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                resetSelection();
+            }
+        });
+
+        // Update map when zoom/pan happens
+        map.on('zoomend moveend', updateMap);
+        
+        // Initial load
+        updateMap();
+        loadStats();
+    </script>
+</body>
+</html>
